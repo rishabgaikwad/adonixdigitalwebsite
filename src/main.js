@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import saturnTexUrl from './assets/saturn-reference.png';
 
 // Register GSAP ScrollTrigger
 gsap.registerPlugin(ScrollTrigger);
@@ -466,12 +470,17 @@ const sceneRefs = {
   UpdatePipeline.updateTime(elapsedTime);
   UpdatePipeline.updateCamera(elapsedTime, progress);
   
-  const { isPulsing, pulseVal, cycleProgress } = UpdatePipeline.updatePulse(elapsedTime, progress);
-  
-  UpdatePipeline.updateCore(elapsedTime, pulseVal, progress);
-  UpdatePipeline.updateParticles(elapsedTime, pulseVal, progress);
+  const isPulsing = false;
+  const pulseVal = 0;
+  const cycleProgress = 0;
   UpdatePipeline.updateBlueprints(elapsedTime, progress);
-  UpdatePipeline.updateStreams(elapsedTime, isPulsing);=============================================================== */
+  if(sceneRefs.aiCore) sceneRefs.aiCore.rotation.y += 0.001;
+  if(sceneRefs.rings) sceneRefs.rings.rotation.z += 0.0005;
+}
+
+/* ==========================================================================
+   5. PERFORMANCE & STATE MANAGERS
+   ========================================================================== */
 const PerformanceManager = {
   init() {
     const w = window.innerWidth;
@@ -516,6 +525,9 @@ const UpdatePipeline = {
   },
   updateTime(elapsedTime) {
     if(sceneRefs.uniforms) sceneRefs.uniforms.u_time.value = elapsedTime;
+  if (sceneRefs.planetShader) sceneRefs.planetShader.uniforms.u_time.value = elapsedTime;
+  if (sceneRefs.ringMat) sceneRefs.ringMat.uniforms.u_time.value = elapsedTime;
+  if (sceneRefs.spaceDust) sceneRefs.spaceDust.rotation.y = elapsedTime * 0.01;
   },
   updateCamera(elapsedTime, progress) {
     if(sceneRefs.camera) {
@@ -1013,6 +1025,20 @@ renderer.setPixelRatio(PerformanceManager.getPixelRatio());
 renderer.setSize(window.innerWidth, window.innerHeight);
 sceneRefs.renderer = renderer;
 
+// --- CINEMATIC POST-PROCESSING (Bloom & Atmosphere Glow) ---
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.45, // Bloom strength (luxurious cinematic glow)
+  0.3,  // Bloom radius
+  0.65  // Bloom threshold (only glow bright rims, rings, and dust crystals)
+);
+composer.addPass(bloomPass);
+sceneRefs.composer = composer;
+
 // Register Resize
 ResizeManager.subscribe((w, h) => {
   renderer.setSize(w, h);
@@ -1021,25 +1047,26 @@ ResizeManager.subscribe((w, h) => {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
+  if (sceneRefs.composer) sceneRefs.composer.setSize(w, h);
 });
 
 // Lighting & Atmosphere (Context Aware)
-let ambIntensity = 0.2;
+let ambIntensity = 1.5;
 let pointColor = 0x59F3FF;
 let pointIntensity = 1.5;
 
 if (typeof document !== 'undefined' && document.body.dataset.scenePreset) {
   const preset = document.body.dataset.scenePreset;
   if (preset === 'ABOUT') {
-    ambIntensity = 0.4;
+    ambIntensity = 1.6;
     pointIntensity = 2.0;
     pointColor = 0x2266CC; // Deep neural blue
   } else if (preset === 'SERVICES') {
-    ambIntensity = 0.6;
+    ambIntensity = 1.8;
     pointIntensity = 2.5;
     pointColor = 0xFFFFFF; // Bright engineering white
   } else if (preset === 'CONTACT') {
-    ambIntensity = 0.1;
+    ambIntensity = 1.4;
     pointIntensity = 1.0;
     pointColor = 0xFF3366; // Urgent active transmission red tint
   }
@@ -1047,9 +1074,15 @@ if (typeof document !== 'undefined' && document.body.dataset.scenePreset) {
 
 const ambientLight = new THREE.AmbientLight(0xffffff, ambIntensity);
 scene.add(ambientLight);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xdddddd, 1.5);
+scene.add(hemiLight);
 const pointLight = new THREE.PointLight(pointColor, pointIntensity, 20);
 pointLight.position.set(2, 2, 2);
 scene.add(pointLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 3, 5);
+scene.add(dirLight);
 
 // 3D Objects Group
 const sceneGroup = new THREE.Group();
@@ -1063,161 +1096,289 @@ const aiCore = new THREE.Group();
 groups.aiCore.add(aiCore);
 sceneRefs.aiCore = aiCore;
 
-// Layer 1: Bright inner energy core (Trapped light illusion)
-const coreGeo = new THREE.IcosahedronGeometry(0.28, 2);
-const coreMat = new THREE.MeshStandardMaterial({
-  color: 0x00E5FF,
-  emissive: 0x00E5FF,
-  emissiveIntensity: 0.5,
+// --- PLANET & RINGS (Saturn-Style) ---
+
+// 1. MASTERPIECE PROCEDURAL GAS GIANT (Swirling Simplex Storms + Luxury Palette)
+const planetGeo = new THREE.SphereGeometry(1, 128, 128); // High-res for seamless shader detail
+
+const planetShader = {
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+    varying vec2 vUv;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      vPosition = position;
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float u_time;
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+    varying vec2 vUv;
+
+    // Simplex noise helper
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    float snoise(vec3 v) {
+      const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+      const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+      vec3 i  = floor(v + dot(v, C.yyy) );
+      vec3 x0 = v - i + dot(i, C.xxx) ;
+      vec3 g = step(x0.yzx, x0.xyz);
+      vec3 l = 1.0 - g;
+      vec3 i1 = min( g.xyz, l.zxy );
+      vec3 i2 = max( g.xyz, l.zxy );
+      vec3 x1 = x0 - i1 + C.xxx;
+      vec3 x2 = x0 - i2 + C.yyy;
+      vec3 x3 = x0 - D.yyy;
+      i = mod289(i); 
+      vec4 p = permute( permute( permute( 
+                 i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+               + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) 
+               + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+      float n_ = 0.142857142857;
+      vec3  ns = n_ * D.wyz - D.xzx;
+      vec4 j = p - 49.0 * floor(p * ns.zzzz);
+      vec4 x_ = floor(j * ns.z);
+      vec4 y_ = floor(j - 7.0 * x_ );
+      vec4 x = x_ *ns.x + ns.yyyy;
+      vec4 y = y_ *ns.x + ns.yyyy;
+      vec4 h = 1.0 - abs(x) - abs(y);
+      vec4 b0 = vec4( x.xy, y.xy );
+      vec4 b1 = vec4( x.zw, y.zw );
+      vec4 s0 = floor(b0)*2.0 + 1.0;
+      vec4 s1 = floor(b1)*2.0 + 1.0;
+      vec4 sh = -step(h, vec4(0.0));
+      vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+      vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+      vec3 p0 = vec3(a0.xy,h.x);
+      vec3 p1 = vec3(a0.zw,h.y);
+      vec3 p2 = vec3(a1.xy,h.z);
+      vec3 p3 = vec3(a1.zw,h.w);
+      vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+      p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+      vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+      m = m * m;
+      return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+    }
+
+    void main() {
+      // Swirling bands coordinate
+      vec3 coord = vPosition * 2.5;
+      float n1 = snoise(vec3(coord.x, coord.y * 5.0 + u_time * 0.08, coord.z));
+      float n2 = snoise(vec3(coord.x * 2.0 - u_time * 0.05, coord.y * 12.0, coord.z * 2.0));
+      
+      float band = sin(vPosition.y * 15.0 + n1 * 1.5 + n2 * 0.5) * 0.5 + 0.5;
+      
+      // Luxury Color Palette (Adonix Brand: Obsidian #0b1020, Gold #d4af37, Electric Blue #4a8cff)
+      vec3 colObsidian = vec3(0.25, 0.28, 0.32); // Shimmering platinum charcoal
+      vec3 colAmber = vec3(0.55, 0.60, 0.68); // Pearl silver
+      vec3 colGold = vec3(0.85, 0.88, 0.92); // Bright silver
+      vec3 colChampagne = vec3(1.0, 1.0, 1.0); // Pure diamond white
+      vec3 colAIBlue = vec3(0.92, 0.96, 1.0); // Ice white aurora
+
+      vec3 surfaceColor = mix(colObsidian, colAmber, smoothstep(0.1, 0.5, band));
+      surfaceColor = mix(surfaceColor, colGold, smoothstep(0.5, 0.85, band));
+      surfaceColor = mix(surfaceColor, colChampagne, smoothstep(0.85, 0.98, band));
+
+      // Add subtle polar aurora blue storms at top and bottom
+      float polar = smoothstep(0.6, 1.0, abs(vPosition.y));
+      surfaceColor = mix(surfaceColor, colAIBlue, polar * (0.5 + 0.5 * sin(u_time + vPosition.x * 10.0)));
+
+      // 3D Lighting & Fresnel Rim Glow
+      vec3 lightDir = normalize(vec3(5.0, 3.0, 5.0));
+      float diff = max(dot(vNormal, lightDir), 0.45); // Always bright and visible across entire sphere // Never pure black
+      
+      float fresnel = 1.0 - max(dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0);
+      fresnel = pow(fresnel, 3.0);
+      vec3 rimColor = mix(colGold, colAIBlue, 0.3) * fresnel * 2.5;
+
+      gl_FragColor = vec4(surfaceColor * diff + rimColor, 1.0);
+    }
+  `,
+  uniforms: {
+    u_time: { value: 0 },
+    u_reveal: { value: 1.0 }
+  }
+};
+
+const planetMat = new THREE.ShaderMaterial(planetShader);
+const planet = new THREE.Mesh(planetGeo, planetMat);
+aiCore.add(planet);
+sceneRefs.planet = planet;
+sceneRefs.planetShader = planetShader;
+
+// Atmosphere / Rim Light Glow (Outer Halo Shell)
+const rimGeo = new THREE.SphereGeometry(1.04, 64, 64);
+const rimMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float u_rimIntensity;
+    varying vec3 vNormal;
+    void main() {
+      float rim = 1.0 - max(dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0);
+      rim = smoothstep(0.5, 1.0, rim);
+      vec3 rimColor = vec3(0.9, 0.95, 1.0) * rim * u_rimIntensity; 
+      gl_FragColor = vec4(rimColor, rim * 0.6 * u_rimIntensity);
+    }
+  `,
+  uniforms: {
+    u_rimIntensity: { value: 1.5 }
+  },
   transparent: true,
-  opacity: 0.7,
   blending: THREE.AdditiveBlending,
+  side: THREE.BackSide,
   depthWrite: false
 });
-const centralCore = new THREE.Mesh(coreGeo, coreMat);
-sceneRefs.centralCore = centralCore;
+const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+planet.add(rimMesh);
+sceneRefs.rimMat = rimMat;
 
-// Inner brightest point
-const innerCoreGeo = new THREE.IcosahedronGeometry(0.15, 2);
-const innerCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-const innerCore = new THREE.Mesh(innerCoreGeo, innerCoreMat);
-centralCore.add(innerCore);
+// Increase studio lighting for debris shimmer
+const dirLight2 = new THREE.DirectionalLight(0xfff5e6, 2.5);
+dirLight2.position.set(5, 3, 5);
+scene.add(dirLight2);
 
-aiCore.add(centralCore);
+const ambientLight2 = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambientLight2);
 
-// Layer 2: Semi-transparent outer shell (Engineered Glass)
-const shellGeo = new THREE.IcosahedronGeometry(0.5, 3);
-const shellMat = new THREE.MeshPhysicalMaterial({
+// 2. MULTI-LAYERED VOLUMETRIC RINGS & INSTANCED DEBRIS BELT
+const ringGeo = new THREE.RingGeometry(1.4, 2.8, 128);
+const ringVertexShader = `
+  varying vec2 vUv;
+  varying vec3 vPos;
+  void main() {
+    vUv = uv;
+    vPos = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const ringFragmentShader = `
+  uniform float u_flare;
+  uniform float u_time;
+  uniform float u_reveal;
+  varying vec2 vUv;
+  varying vec3 vPos;
+  void main() {
+    float dist = length(vPos);
+    float normDist = (dist - 1.4) / 1.4; 
+    
+    // Staggered Ring Arc Sweep Reveal
+    float angle = atan(vPos.y, vPos.x); // -3.14159 to 3.14159
+    float normAngle = (angle + 3.14159265) / (2.0 * 3.14159265); // 0.0 to 1.0
+    if (normAngle > u_reveal) {
+      discard;
+    }
+    
+    float alpha = sin(normDist * 40.0) * 0.5 + 0.5;
+    alpha *= sin(normDist * 15.0 + u_time * 0.2) * 0.5 + 0.5;
+    
+    if (normDist > 0.55 && normDist < 0.6) alpha *= 0.05; // Cassini division gap
+    if (normDist > 0.8 && normDist < 0.85) alpha *= 0.1;
+    
+    alpha *= smoothstep(0.0, 0.08, normDist) * smoothstep(1.0, 0.88, normDist);
+    
+    vec3 ringColor = mix(vec3(0.7, 0.75, 0.8), vec3(1.0, 1.0, 1.0), u_flare * 0.5);
+    ringColor = mix(ringColor, vec3(1.0, 1.0, 1.0), smoothstep(0.4, 0.5, normDist) * u_flare);
+    
+    // Bright diamond laser tip at the leading edge as the ring draws itself open
+    if (u_reveal < 0.99 && abs(normAngle - u_reveal) < 0.03) {
+      ringColor += vec3(1.0, 1.0, 1.0) * 2.5;
+      alpha = max(alpha, 0.95);
+    }
+    
+    gl_FragColor = vec4(ringColor, alpha * (0.6 + u_flare * 0.6));
+  }
+`;
+const ringMat = new THREE.ShaderMaterial({
+  vertexShader: ringVertexShader,
+  fragmentShader: ringFragmentShader,
+  uniforms: {
+    u_flare: { value: 0 },
+    u_time: { value: 0 },
+    u_reveal: { value: 1.0 }
+  },
+  transparent: true,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+
+const rings = new THREE.Mesh(ringGeo, ringMat);
+rings.rotation.x = Math.PI / 2 - 0.02; 
+aiCore.add(rings);
+sceneRefs.rings = rings;
+sceneRefs.ringMat = ringMat;
+
+// --- INSTANCED ASTEROID DEBRIS BELT (1,500 Shimmering Crystals) ---
+const debrisCount = 1500;
+const debrisGeo = new THREE.OctahedronGeometry(0.015, 0);
+const debrisMat = new THREE.MeshStandardMaterial({
   color: 0xffffff,
-  emissive: 0x002244,
-  emissiveIntensity: 0.1,
-  transparent: true,
-  opacity: 0.05,
-  roughness: 0.05,
-  transmission: 1.0,
-  thickness: 1.5,
-  ior: 1.5,
-  depthWrite: false
+  emissive: 0xffffff,
+  emissiveIntensity: 3.5, // Cranked up so crystals are blinding white, never grey!
+  roughness: 0.0,
+  metalness: 0.1 // Low metalness avoids reflecting dark sky void
 });
-const outerShell = new THREE.Mesh(shellGeo, shellMat);
-sceneRefs.outerShell = outerShell;
-aiCore.add(outerShell);
+const debrisBelt = new THREE.InstancedMesh(debrisGeo, debrisMat, debrisCount);
+const dummy = new THREE.Object3D();
 
-// Layer 3: Segmented rotating energy arcs (Precision instruments)
-const arcMat = new THREE.MeshStandardMaterial({
-  color: 0x00E5FF,
-  emissive: 0x0088CC,
-  emissiveIntensity: 0.4,
-  transparent: true,
-  opacity: 0.3,
-  side: THREE.DoubleSide
-});
-
-// Create 3 independent arcs
-const arcs = [];
-const arcData = [
-  { radius: 0.75, tube: 0.003, arcLen: Math.PI * 0.5, initRot: [0, 0, 0], offset: [0.02, -0.01, 0] },
-  { radius: 0.95, tube: 0.002, arcLen: Math.PI * 0.3, initRot: [Math.PI/2, Math.PI/4, 0], offset: [-0.015, 0.02, 0] },
-  { radius: 1.15, tube: 0.0015, arcLen: Math.PI * 0.7, initRot: [Math.PI/3, Math.PI/2, Math.PI/6], offset: [0, 0.01, 0.02] }
-];
-
-arcData.forEach(data => {
-  const geo = new THREE.TorusGeometry(data.radius, data.tube, 3, 48, data.arcLen);
-  const mesh = new THREE.Mesh(geo, arcMat);
-  mesh.rotation.set(...data.initRot);
-  mesh.position.set(...data.offset);
-  arcs.push(mesh);
-  sceneRefs.arcs.push(mesh);
-  aiCore.add(mesh);
-});
-
-// Layer 4: Orbiting Micro Particles (Organic motion setup)
-const microParticleCount = 35;
-const microParticleGeo = new THREE.BufferGeometry();
-const microParticlePos = new Float32Array(microParticleCount * 3);
-const microParticleData = []; // Store orbit parameters
-
-for(let i=0; i < microParticleCount; i++) {
-  const radius = 1.0 + Math.random() * 0.9;
-  const baseSpeed = 0.1 + Math.random() * 0.3;
-  const speedVar = 0.5 + Math.random() * 1.5; // for sine modulation
+for(let i = 0; i < debrisCount; i++) {
   const angle = Math.random() * Math.PI * 2;
-  const inclY = (Math.random() - 0.5) * Math.PI;
-  const inclZ = (Math.random() - 0.5) * Math.PI;
-  
-  microParticleData.push({ radius, baseSpeed, speedVar, angle, inclY, inclZ });
-  // Initial positions set in tick loop
+  const radius = 1.45 + Math.random() * 1.3;
+  const height = (Math.random() - 0.5) * 0.08;
+  dummy.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+  dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  const scale = 0.5 + Math.random() * 1.5;
+  dummy.scale.set(scale, scale, scale);
+  dummy.updateMatrix();
+  debrisBelt.setMatrixAt(i, dummy.matrix);
 }
-microParticleGeo.setAttribute('position', new THREE.BufferAttribute(microParticlePos, 3));
+rings.add(debrisBelt);
+sceneRefs.debrisBelt = debrisBelt;
 
-const microParticleMat = new THREE.PointsMaterial({
-  color: 0x00E5FF, // Soft cyan replacing warm gold
-  size: 0.025,
-  transparent: true,
-  opacity: 0.8,
-  blending: THREE.AdditiveBlending
-});
-const microParticles = new THREE.Points(microParticleGeo, microParticleMat);
-aiCore.add(microParticles);
-sceneRefs.microParticles = microParticles;
+// 3. DEEP SPACE STARLIGHT & DUST FIELD (2,000 Floating Particles)
+const dustCount = 2000;
+const dustGeo = new THREE.BufferGeometry();
+const dustPositions = new Float32Array(dustCount * 3);
+const dustColors = new Float32Array(dustCount * 3);
 
-// --- NEW: Holographic Data Fragments ---
-const holograms = [];
-const holoGroup = new THREE.Group();
-groups.holograms.add(holoGroup);
+for(let i = 0; i < dustCount; i++) {
+  dustPositions[i*3] = (Math.random() - 0.5) * 25;
+  dustPositions[i*3+1] = (Math.random() - 0.5) * 25;
+  dustPositions[i*3+2] = (Math.random() - 0.5) * 25;
 
-const holoGeo = new THREE.PlaneGeometry(0.12, 0.12);
-const holoMat = new THREE.MeshBasicMaterial({
-  color: 0x00E5FF,
-  transparent: true,
-  opacity: 0.15,
-  wireframe: true,
-  depthWrite: false
-});
-
-for(let i=0; i<5; i++) {
-  const holo = new THREE.Mesh(holoGeo, holoMat);
-  holo.position.set(
-    (Math.random() - 0.5) * 4,
-    (Math.random() - 0.5) * 4,
-    (Math.random() - 0.5) * 4
-  );
-  holo.position.normalize().multiplyScalar(1.8 + Math.random() * 1.5);
-  holograms.push(holo);
-  sceneRefs.holograms.push(holo);
-  holoGroup.add(holo);
+  // Mix of luxury gold and AI cyan starlight
+  if (Math.random() > 0.3) {
+    dustColors[i*3] = 1.0; dustColors[i*3+1] = 1.0; dustColors[i*3+2] = 1.0; // Gold
+  } else {
+    dustColors[i*3] = 0.85; dustColors[i*3+1] = 0.9; dustColors[i*3+2] = 0.95;  // AI Blue
+  }
 }
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
 
-// --- NEW: Data Stream Lines ---
-const streamGeo = new THREE.BufferGeometry();
-const streamPos = new Float32Array(6); // 2 points (x,y,z)
-streamGeo.setAttribute('position', new THREE.BufferAttribute(streamPos, 3));
-const streamMat = new THREE.LineBasicMaterial({
-  color: 0x00E5FF,
+const dustMat = new THREE.PointsMaterial({
+  size: 0.04,
+  vertexColors: true,
   transparent: true,
-  opacity: 0,
-  blending: THREE.AdditiveBlending
+  opacity: 0.85, blending: THREE.AdditiveBlending
 });
-const dataStream = new THREE.Line(streamGeo, streamMat);
-aiCore.add(dataStream);
-sceneRefs.dataStream = dataStream;
+const spaceDust = new THREE.Points(dustGeo, dustMat);
+scene.add(spaceDust);
+sceneRefs.spaceDust = spaceDust;
 
-// --- NEW: Energy Pulse Wave ---
-const pulseGeo = new THREE.IcosahedronGeometry(0.3, 2);
-const pulseMat = new THREE.MeshBasicMaterial({
-  color: 0x00E5FF,
-  transparent: true,
-  opacity: 0,
-  wireframe: true,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false
-});
-const pulseRing = new THREE.Mesh(pulseGeo, pulseMat);
-aiCore.add(pulseRing);
-sceneRefs.pulseRing = pulseRing;
-
-// Make the AI core scale starting state
-aiCore.scale.set(1.4, 1.4, 1.4);
+aiCore.scale.set(0.5, 0.5, 0.5);
 
 // 2. Sprint 3B & 3C: Topological Intelligence Network
 const particleCount = 400;
@@ -1299,7 +1460,7 @@ lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3
 
 particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
 const particleMaterial = new THREE.PointsMaterial({
-  color: 0x59F3FF,
+  color: 0xffffff,
   size: 0.05,
   transparent: true,
   opacity: 0, // GSAP controls opacity
@@ -1309,7 +1470,7 @@ const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
 particleSystem.scale.set(0.1, 0.1, 0.1); 
 
 const lineMaterial = new THREE.LineBasicMaterial({
-  color: 0x2266CC, // Slightly darker, distinct neural pathway color
+  color: 0xaaaaaa, // Slightly darker, distinct neural pathway color
   transparent: true,
   opacity: 0, // GSAP controls opacity
   blending: THREE.AdditiveBlending
@@ -1466,17 +1627,17 @@ const fragmentShader = `
     float f = fbm(warpedSt + r);
 
     // Colors mimicking calm digital energy / intelligent field
-    vec3 color1 = vec3(0.01, 0.01, 0.02); // Deep space dark
-    vec3 color2 = vec3(0.015, 0.04, 0.08); // Deep navy/cyan
-    vec3 color3 = vec3(0.0, 0.0, 0.01);   // Pure void
-    vec3 color4 = vec3(0.03, 0.02, 0.06); // Subtle violet
+    vec3 color1 = vec3(0.0, 0.0, 0.0); // True Obsidian Black // Deep space dark
+    vec3 color2 = vec3(0.008, 0.008, 0.008); // Barely perceptible charcoal wave // Deep navy/cyan
+    vec3 color3 = vec3(0.0, 0.0, 0.0); // Pure void   // Pure void
+    vec3 color4 = vec3(0.004, 0.004, 0.004); // Deep black // Subtle violet
 
     vec3 color = mix(color1, color2, clamp((f * f) * 3.0, 0.0, 1.0));
     color = mix(color, color3, clamp(length(q), 0.0, 1.0));
     color = mix(color, color4, clamp(length(r.x), 0.0, 1.0));
     
     // Apply core influence (very subtle glow)
-    color += vec3(0.0, 0.02, 0.04) * smoothstep(0.5, 0.0, coreDist);
+    color += vec3(0.01, 0.01, 0.01) * smoothstep(0.5, 0.0, coreDist);
 
     // Vignette
     vec2 center = vUv - 0.5;
@@ -1528,61 +1689,70 @@ sections.forEach((sec, idx) => {
   );
 });
 
-// Main 3D Scroll Timeline
+// Main 3D Scroll Timeline (Choreographed Staggered Reveal + Parallax Orbit)
 const main3DTimeline = gsap.timeline({
   scrollTrigger: {
     trigger: ".scroll-container",
     start: "top top",
     end: "bottom bottom",
-    scrub: true, // Use true instead of numeric for tighter lenis sync
+    scrub: 1.2, // Smooth cinematic scrubbing
   }
 });
 
-// Sync shader uniform to scroll
-main3DTimeline.to(uniforms.u_scroll, {
-  value: 10.0,
-  ease: "none"
-}, 0);
+// Set initial baseline states at time 0 (start of scroll reveal)
+main3DTimeline.set(aiCore.scale, { x: 0.85, y: 0.85, z: 0.85 }, 0)
+  .set(camera.position, { x: 0, y: 0, z: 5.2 }, 0)
+  .set(sceneRefs.planet.scale, { x: 0.65, y: 0.65, z: 0.65 }, 0)
+  .set(sceneRefs.planet.rotation, { x: 0.1, y: 0, z: 0 }, 0)
+  .set(sceneRefs.ringMat.uniforms.u_reveal, { value: 0.0 }, 0) // Rings initially drawn closed!
+  .set(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.05, y: 0, z: 0 }, 0) // Edge-on tilt!
+  .set(sceneRefs.debrisBelt.scale, { x: 0.01, y: 0.01, z: 0.01 }, 0)
+  .set(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 0.2 }, 0)
+  .set(sceneRefs.ringMat.uniforms.u_flare, { value: 0.1 }, 0)
+  .set(sceneRefs.spaceDust.position, { z: -8 }, 0);
 
-// Chapter 2 Transition: AI Core Wakes Up (Prepares for phase 2 unfolding)
-main3DTimeline.to(aiCore.scale, {
-  x: 1.8, y: 1.8, z: 1.8,
-  ease: "power2.inOut"
-}, 0)
-// Removed arc GSAP rotation, handled procedurally in UpdatePipeline
-.to(particleSystem.scale, {
-  x: 2, y: 2, z: 2,
-  ease: "power2.out"
-}, 0.05)
-.to(particleSystem.material, {
-  opacity: 1,
-  ease: "power1.inOut"
-}, 0.05)
-.to(lineMaterial, {
-  opacity: 0.3,
-  ease: "power1.inOut"
-}, 0.05);
+// --- PHASE 1: PLANET BODY REVEAL & 3D ROTATION (0.00 -> 0.11 : 0% to ~40% of reveal range) ---
+// Planet scales up independently with back.out overshoot while rotating in 3D space toward camera
+main3DTimeline.to(sceneRefs.planet.scale, { x: 1.0, y: 1.0, z: 1.0, duration: 0.11, ease: "back.out(1.2)" }, 0.00)
+  .to(sceneRefs.planet.rotation, { x: 0.3, y: Math.PI * 0.5, duration: 0.11, ease: "power3.out" }, 0.00)
+  .to(camera.position, { z: 4.2, y: 0.3, duration: 0.11, ease: "power2.out" }, 0.00);
 
-// Chapter 3-4 Transition: Move camera through network
-main3DTimeline.to(camera.position, {
-  z: 1.5,
-  ease: "sine.inOut"
-}, 0.2)
-.to(sceneGroup.rotation, {
-  y: Math.PI * 3,
-  ease: "none"
-}, 0.1);
+// --- PHASE 2: RING ARC SWEEP & 3D TILT (0.08 -> 0.20 : staggered after planet start) ---
+// Ring draws itself open via u_reveal clip while tilting from edge-on to full 3D viewing angle
+main3DTimeline.to(sceneRefs.ringMat.uniforms.u_reveal, { value: 1.0, duration: 0.12, ease: "power3.out" }, 0.08)
+  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.55, y: -0.25, duration: 0.12, ease: "power3.out" }, 0.08)
+  .to(sceneRefs.debrisBelt.scale, { x: 1.0, y: 1.0, z: 1.0, duration: 0.12, ease: "back.out(1.1)" }, 0.08);
 
-// Chapter 5 Transition: Converging
-main3DTimeline.to(camera.position, {
-  z: 6,
-  ease: "sine.inOut"
-}, 0.6)
-.to(particleSystem.scale, {
-  x: 0.8, y: 0.8, z: 0.8,
-  ease: "power2.inOut"
-}, 0.7);
+// --- PHASE 3: RIM GLOW & STARLIGHT DUST SETTLE (0.16 -> 0.28 : final settling phase) ---
+// Atmosphere halo blooms to full cyber-luxury brilliance and starlight field glides forward into focus
+main3DTimeline.to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 3.0, duration: 0.12, ease: "expo.out" }, 0.16)
+  .to(sceneRefs.ringMat.uniforms.u_flare, { value: 1.5, duration: 0.12, ease: "power2.out" }, 0.16)
+  .to(sceneRefs.spaceDust.position, { z: 0, duration: 0.12, ease: "power3.out" }, 0.16);
 
+// --- PHASE 4: SERVICES PARALLAX SWEEP (0.28 -> 0.46) ---
+// Fully assembled celestial system glides majestically to the right side of the screen to stand beside Services cards
+main3DTimeline.to(aiCore.position, { x: 2.3, y: -0.3, z: 0.3, duration: 0.18, ease: "power2.inOut" }, 0.28)
+  .to(camera.position, { x: 1.5, y: -0.2, z: 2.6, duration: 0.18, ease: "power2.inOut" }, 0.28)
+  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.35, y: -0.15, duration: 0.18, ease: "power2.inOut" }, 0.28)
+  .to(aiCore.rotation, { y: Math.PI * 1.6, duration: 0.18, ease: "power1.inOut" }, 0.28)
+  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 3.2, duration: 0.18, ease: "none" }, 0.28);
+
+// --- SLIDES 3 to 6 (AI, RESULTS, CASES, CONTACT: 0.46 -> 1.0) --- CALM BACKGROUND PRESENCE
+main3DTimeline.to(aiCore.position, { x: 1.2, y: 0.2, z: 0.0, duration: 0.18, ease: "power1.inOut" }, 0.46)
+  .to(camera.position, { x: 1.0, y: 0.0, z: 3.2, duration: 0.18, ease: "power1.inOut" }, 0.46)
+  .to(aiCore.scale, { x: 0.85, y: 0.85, z: 0.85, duration: 0.18, ease: "power1.inOut" }, 0.46)
+  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 1.8, duration: 0.18, ease: "none" }, 0.46);
+
+main3DTimeline.to(aiCore.position, { x: 1.6, y: 0.0, z: -0.5, duration: 0.18, ease: "power1.inOut" }, 0.64)
+  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.25, duration: 0.18, ease: "power1.inOut" }, 0.64)
+  .to(aiCore.rotation, { y: Math.PI * 2.2, duration: 0.18, ease: "none" }, 0.64);
+
+main3DTimeline.to(aiCore.position, { x: 0, y: 0.5, z: -2.5, duration: 0.18, ease: "power2.inOut" }, 0.82)
+  .to(camera.position, { x: 0, y: 0, z: 5.5, duration: 0.18, ease: "power2.inOut" }, 0.82)
+  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 0.8, duration: 0.18, ease: "none" }, 0.82)
+  .to(sceneRefs.ringMat.uniforms.u_flare, { value: 0.1, duration: 0.18, ease: "none" }, 0.82);
+
+// 3. Add Continuous Self-Rotation in tick()
 // Trigger results counters & bars animation when reaching results section
 ScrollTrigger.create({
   trigger: "#results",
@@ -1646,6 +1816,9 @@ const cursorRing = document.getElementById("custom-cursor-ring");
 window.addEventListener("mousemove", (e) => {
   gsap.to(cursor, { x: e.clientX, y: e.clientY, duration: 0.05 });
   gsap.to(cursorRing, { x: e.clientX, y: e.clientY, duration: 0.15 });
+  // Store normalized mouse coordinates for 3D Magnetic Parallax
+  window.mouseNormX = (e.clientX / window.innerWidth) * 2 - 1;
+  window.mouseNormY = -(e.clientY / window.innerHeight) * 2 + 1;
 });
 
 // Cursor Hover Effects
@@ -1680,24 +1853,27 @@ if (mobileToggle && mobileMenu) {
   });
 }
 
-// Parallax (Tilt Effect) for multiple cards
-const parallaxCards = document.querySelectorAll(".test-card, .result-card, .service-item");
-parallaxCards.forEach((card) => {
+// High-Resolution Spotlight & 3D Parallax Tilt for all interactive cards
+const premiumCards = document.querySelectorAll(".holo-card, .service-item, .industry-showcase-card, .metric-item, .test-card, .result-card");
+premiumCards.forEach((card) => {
   card.addEventListener("mousemove", (e) => {
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    const xc = rect.width / 2;
-    const yc = rect.height / 2;
+    // Set variables for radial CSS gradient spotlight
+    card.style.setProperty("--mouse-x", `${x}px`);
+    card.style.setProperty("--mouse-y", `${y}px`);
     
-    const tiltX = (yc - y) / 10;
-    const tiltY = (x - xc) / 10;
+    // Smooth 3D Perspective Tilt
+    const tiltX = (rect.height / 2 - y) / 18;
+    const tiltY = (x - rect.width / 2) / 18;
     
     gsap.to(card, {
       rotateX: tiltX,
       rotateY: tiltY,
-      duration: 0.3,
+      scale: 1.02,
+      duration: 0.25,
       ease: "power2.out"
     });
   });
@@ -1706,6 +1882,7 @@ parallaxCards.forEach((card) => {
     gsap.to(card, {
       rotateX: 0,
       rotateY: 0,
+      scale: 1,
       duration: 0.5,
       ease: "power2.out"
     });
@@ -2034,114 +2211,42 @@ function tick() {
   // Continuous rotation for objects
   if (sceneGroup) {
     if (typeof aiCore !== 'undefined') {
-      const masterBreath = Math.sin(elapsedTime * 1.2);
-      aiCore.rotation.y = elapsedTime * 0.015; // Extremely slow rotation
-      
-      // Independent segmented arc rotations (precision instruments)
-      if (typeof arcs !== 'undefined' && arcs.length === 3) {
-        arcs[0].rotation.z = elapsedTime * 0.08 + Math.sin(elapsedTime*0.5)*0.1;
-        arcs[1].rotation.x = elapsedTime * -0.05 + Math.cos(elapsedTime*0.4)*0.1;
-        arcs[2].rotation.y = elapsedTime * 0.04 + Math.sin(elapsedTime*0.3)*0.1;
+      // Continuous slow self-rotation on the planet's axis
+      if (sceneRefs.planet) {
+        sceneRefs.planet.rotation.y = elapsedTime * 0.05;
+        
       }
-      
-      // Organic drifting micro particles
-      if (typeof microParticleData !== 'undefined') {
-        const positions = microParticles.geometry.attributes.position.array;
-        for (let i = 0; i < microParticleCount; i++) {
-          const data = microParticleData[i];
-          // Dynamic speed: pauses and speeds up
-          const currentSpeed = data.baseSpeed * (1.0 + Math.sin(elapsedTime * data.speedVar));
-          data.angle += currentSpeed * 0.005;
-          
-          // Slight radius breathing
-          const r = data.radius + Math.sin(elapsedTime * 1.5 + i) * 0.03;
-          
-          // Apply inclinations
-          const x = r * Math.cos(data.angle);
-          const y = r * Math.sin(data.angle) * Math.sin(data.inclY);
-          const z = r * Math.sin(data.angle) * Math.cos(data.inclZ);
-          
-          positions[i*3] = x;
-          positions[i*3+1] = y;
-          positions[i*3+2] = z;
-        }
-        microParticles.geometry.attributes.position.needsUpdate = true;
-      }
-      
-      // 7-Second AI Intelligence Cycle
-      const cycleTime = elapsedTime % 7.0;
-      let pulseVal = 0;
-      if (cycleTime < 2.0) {
-        pulseVal = Math.sin((cycleTime / 2.0) * Math.PI); // 0 -> 1 -> 0
-        
-        // 3D Pulse wave expansion
-        const pScale = 1.0 + (cycleTime / 2.0) * 4.0;
-        pulseRing.scale.set(pScale, pScale, pScale);
-        pulseRing.material.opacity = (1.0 - (cycleTime / 2.0)) * 0.25;
-        
-        // DOM Card Reactivity
-        if (cycleTime > 0.8 && cycleTime < 1.8) {
-          document.querySelectorAll('.holo-card').forEach(c => c.classList.add('ai-pulsing'));
-        } else {
-          document.querySelectorAll('.holo-card').forEach(c => c.classList.remove('ai-pulsing'));
-        }
-      } else {
-        pulseRing.material.opacity = 0;
-        document.querySelectorAll('.holo-card').forEach(c => c.classList.remove('ai-pulsing'));
-      }
-      
-      if (typeof uniforms !== 'undefined') uniforms.u_pulse.value = pulseVal;
-
-      // Holographic Data Fragments Orbit & Laser Stream
-      if (typeof holoGroup !== 'undefined') {
-        holoGroup.rotation.y = elapsedTime * 0.02 + Math.sin(elapsedTime * 0.5) * 0.03;
-        holoGroup.rotation.z = Math.cos(elapsedTime * 0.3) * 0.02;
-        
-        // Shoot subtle data stream
-        if (Math.random() < 0.02 && cycleTime > 2.0) {
-          const target = holograms[Math.floor(Math.random() * holograms.length)];
-          const pos = dataStream.geometry.attributes.position;
-          
-          target.updateMatrixWorld();
-          const targetPos = new THREE.Vector3().setFromMatrixPosition(target.matrixWorld);
-          aiCore.worldToLocal(targetPos);
-          
-          pos.setXYZ(1, targetPos.x, targetPos.y, targetPos.z);
-          pos.needsUpdate = true;
-          dataStream.material.opacity = 0.5;
-        } else {
-          dataStream.material.opacity *= 0.85; // fast fade
-        }
-      }
-      
-      // Organic breathing scale + Pulse swelling
-      if (typeof centralCore !== 'undefined' && typeof outerShell !== 'undefined') {
-        const breath = 1.0 + masterBreath * 0.02 + (pulseVal * 0.05);
-        
-        const prog = sceneRefs.uniforms ? Math.min(1.0, sceneRefs.uniforms.u_scroll.value / 10.0) : 0;
-        const remap = (val, min, max) => Math.max(0, Math.min(1, (val - min) / (max - min)));
-        
-        // Continuous, seamless intensity drop overlapping chapters
-        const evolutionEase = Math.pow(remap(prog, 0.4, 1.0), 1.5);
-        const intensityScale = 1.0 - (evolutionEase * 0.5); // Max 50% drop
-
-        centralCore.scale.set(breath, breath, breath);
-        centralCore.material.emissiveIntensity = (0.5 + (pulseVal * 0.8)) * intensityScale;
-        
-        const shellBreath = 1.0 + Math.sin(elapsedTime * 1.5) * 0.015;
-        outerShell.scale.set(shellBreath, shellBreath, shellBreath);
+      // Slower independent ring rotation
+      if (sceneRefs.rings) {
+        sceneRefs.rings.rotation.z = elapsedTime * -0.02;
       }
     }
 
     particleSystem.rotation.y = elapsedTime * 0.02;
   }
   
+  // High-Resolution Magnetic 3D Mouse Parallax
+  if (typeof window.mouseNormX !== 'undefined' && typeof aiCore !== 'undefined' && aiCore) {
+    aiCore.rotation.x += (window.mouseNormY * 0.18 - aiCore.rotation.x) * 0.05;
+    aiCore.rotation.z += (-window.mouseNormX * 0.18 - aiCore.rotation.z) * 0.05;
+    
+    // Opposite parallax depth layer for starlight field
+    if (sceneRefs.spaceDust) {
+      sceneRefs.spaceDust.position.x += (-window.mouseNormX * 0.5 - sceneRefs.spaceDust.position.x) * 0.05;
+      sceneRefs.spaceDust.position.y += (-window.mouseNormY * 0.5 - sceneRefs.spaceDust.position.y) * 0.05;
+    }
+  }
+
   // Extremely subtle camera drift
   camera.position.x = cameraBaseX + Math.sin(elapsedTime * 0.2) * 0.015;
   camera.position.y = cameraBaseY + Math.cos(elapsedTime * 0.15) * 0.015;
 
   // Render Scene
-  renderer.render(scene, camera);
+  if (sceneRefs.composer) {
+    sceneRefs.composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 
   // Next frame
   requestAnimationFrame(tick);
@@ -2155,8 +2260,57 @@ tick();
    ========================================================================== */
 
 /* ==========================================================================
-   CINEMATIC LOADER TIMER
+   CINEMATIC LOADER TIMER & ENTRANCE DROP ANIMATION
    ========================================================================== */
+function triggerEntranceAnimation() {
+  if (typeof aiCore === 'undefined' || !aiCore) return;
+  
+  console.log('🚀 Triggering Saturn Drop Entrance Animation!');
+  
+  // Set initial drop start positions (high above and deep in space)
+  aiCore.position.set(0, 7.5, -4);
+  aiCore.scale.set(0.1, 0.1, 0.1);
+  if (sceneRefs.rings) sceneRefs.rings.rotation.set(Math.PI / 2 + 0.8, 0.5, 0);
+  if (sceneRefs.ringMat) sceneRefs.ringMat.uniforms.u_flare.value = 2.0;
+
+  // Drop animation into Hero center
+  gsap.to(aiCore.position, {
+    x: 0,
+    y: 0,
+    z: 0,
+    duration: 2.4,
+    ease: "power3.out"
+  });
+  gsap.to(aiCore.scale, {
+    x: 0.85,
+    y: 0.85,
+    z: 0.85,
+    duration: 2.4,
+    ease: "elastic.out(1, 0.75)"
+  });
+  if (sceneRefs.rings) {
+    gsap.to(sceneRefs.rings.rotation, {
+      x: Math.PI / 2 - 0.2,
+      y: 0,
+      z: 0,
+      duration: 2.6,
+      ease: "power3.out"
+    });
+  }
+  if (sceneRefs.ringMat) {
+    sceneRefs.ringMat.uniforms.u_reveal.value = 0.0;
+    gsap.to(sceneRefs.ringMat.uniforms.u_reveal, { value: 1.0, duration: 2.2, ease: "power3.out", delay: 0.4 });
+    gsap.to(sceneRefs.ringMat.uniforms.u_flare, { value: 0.2, duration: 2.0, ease: "power2.out" });
+  }
+
+  // Animate Hero UI elements dropping in smoothly
+  if (document.querySelector(".main-headline")) {
+    gsap.fromTo(".main-headline, .subheadline, .hero-actions, .hologram-dashboards",
+      { opacity: 0, y: 45 },
+      { opacity: 1, y: 0, duration: 1.2, stagger: 0.15, ease: "power3.out", delay: 0.4 }
+    );
+  }
+}
 const loader = document.getElementById("loader");
 const loaderBar = document.getElementById("loader-bar");
 const loaderPercent = document.getElementById("loader-percent");
@@ -2165,6 +2319,7 @@ if (loader && loaderBar && loaderPercent) {
   if (sessionStorage.getItem('adonix_initialized')) {
     loader.style.display = 'none';
     loader.classList.add("loaded");
+    setTimeout(() => triggerEntranceAnimation(), 100);
     if (document.body) {
       gsap.fromTo(document.body, { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.out" });
     }
@@ -2213,5 +2368,38 @@ document.querySelectorAll('a').forEach(anchor => {
       // Fallback: If GSAP transition fails or is blocked, force navigation
       setTimeout(executeNavigation, 700);
     }
+  });
+});
+
+
+/* ==========================================================================
+   MICRO-ANIMATIONS: 3D GLASS TILT & CYBER SCRAMBLE
+   ========================================================================== */
+
+// 1. 3D Glass Card Tilt Effect
+document.querySelectorAll('.glass').forEach(card => {
+  card.addEventListener('mousemove', (e) => {
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    // Calculate rotation (-10 to +10 degrees max)
+    const rotateX = ((y - centerY) / centerY) * -10;
+    const rotateY = ((x - centerX) / centerX) * 10;
+    
+    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+    card.style.transition = 'none';
+    
+    // Add subtle glare follow
+    card.style.boxShadow = `${(centerX - x) / 5}px ${(centerY - y) / 5}px 30px rgba(212, 175, 55, 0.1)`;
+  });
+  
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+    card.style.transition = 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.5s ease';
+    card.style.boxShadow = 'none';
   });
 });
