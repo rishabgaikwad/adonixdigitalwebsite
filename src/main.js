@@ -1923,39 +1923,26 @@ main3DTimeline.to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 3.0, durati
   .to(sceneRefs.ringMat.uniforms.u_flare, { value: 1.5, duration: 0.12, ease: "power2.out" }, 0.16)
   .to(sceneRefs.spaceDust.position, { z: 0, duration: 0.12, ease: "power3.out" }, 0.16);
 
-// --- PHASE 4: SERVICES PARALLAX SWEEP (0.28 -> 0.46) ---
+// --- PHASE 4: SERVICES PARALLAX SWEEP (0.28 -> 0.52) ---
 // Fully assembled celestial system glides majestically to the right side of the screen to stand beside Services cards
-main3DTimeline.to(aiCore.position, { x: 2.3, y: -0.3, z: 0.3, duration: 0.18, ease: "power2.inOut" }, 0.28)
-  .to(camera.position, { x: 1.5, y: -0.2, z: 2.6, duration: 0.18, ease: "power2.inOut" }, 0.28)
-  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.35, y: -0.15, duration: 0.18, ease: "power2.inOut" }, 0.28)
-  .to(aiCore.rotation, { y: Math.PI * 1.6, duration: 0.18, ease: "power1.inOut" }, 0.28)
-  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 3.2, duration: 0.18, ease: "none" }, 0.28);
+main3DTimeline.to(aiCore.position, { x: 2.3, y: -0.3, z: 0.3, duration: 0.24, ease: "power2.inOut" }, 0.28)
+  .to(camera.position, { x: 1.5, y: -0.2, z: 2.6, duration: 0.24, ease: "power2.inOut" }, 0.28)
+  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.35, y: -0.15, duration: 0.24, ease: "power2.inOut" }, 0.28)
+  .to(aiCore.rotation, { y: Math.PI * 1.6, duration: 0.24, ease: "power1.inOut" }, 0.28)
+  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 3.2, duration: 0.24, ease: "none" }, 0.28);
 
-// --- SLIDES 3 to 6 (AI, RESULTS, CASES, CONTACT: 0.46 -> 1.0) --- CALM BACKGROUND PRESENCE
-main3DTimeline.to(aiCore.position, { x: 1.2, y: 0.2, z: 0.0, duration: 0.18, ease: "power1.inOut" }, 0.46)
-  .to(camera.position, { x: 1.0, y: 0.0, z: 3.2, duration: 0.18, ease: "power1.inOut" }, 0.46)
-  .to(aiCore.scale, { x: 0.85, y: 0.85, z: 0.85, duration: 0.18, ease: "power1.inOut" }, 0.46)
-  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 1.8, duration: 0.18, ease: "none" }, 0.46);
+// --- SLIDES 3 to 5 (INDUSTRIES, CASES, CONTACT: 0.52 -> 1.0) --- CALM BACKGROUND PRESENCE
+main3DTimeline.to(aiCore.position, { x: 1.6, y: 0.0, z: -0.5, duration: 0.24, ease: "power1.inOut" }, 0.52)
+  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.25, duration: 0.24, ease: "power1.inOut" }, 0.52)
+  .to(aiCore.rotation, { y: Math.PI * 2.2, duration: 0.24, ease: "none" }, 0.52);
 
-main3DTimeline.to(aiCore.position, { x: 1.6, y: 0.0, z: -0.5, duration: 0.18, ease: "power1.inOut" }, 0.64)
-  .to(sceneRefs.rings.rotation, { x: Math.PI / 2 - 0.25, duration: 0.18, ease: "power1.inOut" }, 0.64)
-  .to(aiCore.rotation, { y: Math.PI * 2.2, duration: 0.18, ease: "none" }, 0.64);
-
-main3DTimeline.to(aiCore.position, { x: 0, y: 0.5, z: -2.5, duration: 0.18, ease: "power2.inOut" }, 0.82)
-  .to(camera.position, { x: 0, y: 0, z: 5.5, duration: 0.18, ease: "power2.inOut" }, 0.82)
-  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 0.8, duration: 0.18, ease: "none" }, 0.82)
-  .to(sceneRefs.ringMat.uniforms.u_flare, { value: 0.1, duration: 0.18, ease: "none" }, 0.82);
+main3DTimeline.to(aiCore.position, { x: 0, y: 0.5, z: -2.5, duration: 0.24, ease: "power2.inOut" }, 0.76)
+  .to(camera.position, { x: 0, y: 0, z: 5.5, duration: 0.24, ease: "power2.inOut" }, 0.76)
+  .to(sceneRefs.rimMat.uniforms.u_rimIntensity, { value: 0.8, duration: 0.24, ease: "none" }, 0.76)
+  .to(sceneRefs.ringMat.uniforms.u_flare, { value: 0.1, duration: 0.24, ease: "none" }, 0.76);
 
 // 3. Add Continuous Self-Rotation in tick()
-// Trigger results counters & bars animation when reaching results section
-ScrollTrigger.create({
-  trigger: "#results",
-  start: "top 50%",
-  onEnter: () => {
-    const resEl = document.getElementById("results"); if (resEl) resEl.classList.add("active-anim");
-    animateCounters();
-  }
-});
+
 
 /* ==========================================================================
    INTERACTIVE DETAILS
@@ -2059,31 +2046,31 @@ premiumCards.forEach((card) => {
     card.style.setProperty("--mouse-x", `${x}px`);
     card.style.setProperty("--mouse-y", `${y}px`);
     
-    // Smooth 3D Perspective Tilt disabled to keep cards fixed
-    /*
-    const tiltX = (rect.height / 2 - y) / 18;
-    const tiltY = (x - rect.width / 2) / 18;
-    
-    gsap.to(card, {
-      rotateX: tiltX,
-      rotateY: tiltY,
-      scale: 1.02,
-      duration: 0.25,
-      ease: "power2.out"
-    });
-    */
+    // Smooth 3D Perspective Tilt disabled to keep cards fixed, EXCEPT on products page
+    if (window.location.pathname.includes('products')) {
+      const tiltX = (rect.height / 2 - y) / 18;
+      const tiltY = (x - rect.width / 2) / 18;
+      
+      gsap.to(card, {
+        rotateX: tiltX,
+        rotateY: tiltY,
+        scale: 1.02,
+        duration: 0.25,
+        ease: "power2.out"
+      });
+    }
   });
 
   card.addEventListener("mouseleave", () => {
-    /*
-    gsap.to(card, {
-      rotateX: 0,
-      rotateY: 0,
-      scale: 1,
-      duration: 0.5,
-      ease: "power2.out"
-    });
-    */
+    if (window.location.pathname.includes('products')) {
+      gsap.to(card, {
+        rotateX: 0,
+        rotateY: 0,
+        scale: 1,
+        duration: 0.5,
+        ease: "power2.out"
+      });
+    }
   });
 });
 
@@ -2549,7 +2536,7 @@ document.querySelectorAll('a').forEach(anchor => {
    ========================================================================== */
 
 // 1. 3D Glass Card Tilt Effect
-document.querySelectorAll('.glass').forEach(card => {
+document.querySelectorAll('.glass:not(#contact-form)').forEach(card => {
   card.addEventListener('mousemove', (e) => {
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -2575,3 +2562,47 @@ document.querySelectorAll('.glass').forEach(card => {
     card.style.boxShadow = 'none';
   });
 });
+
+// --- AJAX Form Submission for Web3Forms ---
+const web3ContactForm = document.getElementById('contact-form');
+if (web3ContactForm) {
+  web3ContactForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById('submit-btn');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="btn-text">Transmitting...</span>';
+    submitBtn.disabled = true;
+
+    const formData = new FormData(web3ContactForm);
+
+    try {
+      const response = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        submitBtn.innerHTML = '<span class="btn-text">Transmission Successful! ✓</span>';
+        submitBtn.style.backgroundColor = '#25D366'; // Success Green
+        submitBtn.style.color = '#fff';
+        web3ContactForm.reset();
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error(error);
+      submitBtn.innerHTML = '<span class="btn-text">Error! Try Again.</span>';
+      submitBtn.style.backgroundColor = '#ff4444';
+    }
+
+    // Reset button after 3 seconds
+    setTimeout(() => {
+      submitBtn.innerHTML = originalText;
+      submitBtn.style.backgroundColor = '';
+      submitBtn.style.color = '';
+      submitBtn.disabled = false;
+    }, 3000);
+  });
+}

@@ -257,7 +257,7 @@ body {
   height: 40px;
   width: auto;
   object-fit: contain;
-  transform: scale(3.5);
+  transform: scale(4.5);
   transform-origin: left center;
 }
 
@@ -1607,7 +1607,7 @@ body {
     display: none;
   }
   .nav-img {
-    transform: scale(2.5);
+    transform: scale(3.2);
   }
   .mobile-toggle-btn {
     display: flex;
