@@ -8,6 +8,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import saturnTexUrl from './assets/saturn-reference.png';
+import { initChatWidget } from './chatWidget.js';
 
 // Register GSAP ScrollTrigger
 gsap.registerPlugin(ScrollTrigger);
@@ -652,6 +653,7 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     setLanguage("en");
   }
+  initChatWidget();
 });
 
 /* ==========================================================================
