@@ -293,7 +293,10 @@ const translations = {
     contact_email_ph: "ceo@company.sa",
     contact_req_ph: "Describe the scale of your operations...",
     blog_news_placeholder: "Enter your email",
-    read_article: "Read Article \u2192"
+    read_article: "Read Article \u2192",
+    contact_map_title: "Our Headquarters",
+    contact_map_desc: "Jeddah, Saudi Arabia",
+    contact_map_btn: "Open in Maps"
   },
   ar: {
     nav_home: "الرئيسية",
@@ -432,6 +435,9 @@ const translations = {
     submit_btn: "احجز استشارتك المجانية للنمو الآن",
     f_privacy: "سياسة الخصوصية",
     f_terms: "شروط الخدمة",
+    contact_map_title: "مقرنا الرئيسي",
+    contact_map_desc: "جدة، المملكة العربية السعودية",
+    contact_map_btn: "افتح في الخرائط",
     nav_products: "منتجاتنا",
     products_tag: "محفظتنا",
     products_title: "نبتكر المستقبل.",
@@ -574,11 +580,11 @@ const translations = {
   }
 };
 
-let currentLang = localStorage.getItem("adonix_lang") || "en";
+let currentLang = localStorage.getItem("adonix_lang_v2") || "ar";
 
 function setLanguage(lang) {
   currentLang = lang;
-  localStorage.setItem("adonix_lang", lang);
+  localStorage.setItem("adonix_lang_v2", lang);
   const htmlEl = document.documentElement;
   htmlEl.setAttribute("lang", lang);
   htmlEl.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
