@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         featuredContainer.style.display = 'block';
         const catColor = getCategoryColor(featuredPost.category);
         featuredContainer.innerHTML = `
-          <a href="blog-post.html?slug=${featuredPost.slug}" style="text-decoration: none;">
+          <a href="${lang === 'ar' ? '/blog/' : '/en/blog/'}${featuredPost.slug}/" style="text-decoration: none;">
             <div class="glass" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; padding: clamp(1.5rem, 5vw, 2rem); border-radius: 20px; transition: all 0.3s ease; border-top: 2px solid ${catColor};" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
               <div style="background: url('${featuredPost.image}') center/cover no-repeat; border-radius: 15px; min-height: 300px; display: flex; align-items: center; justify-content: center; position: relative;">
                  <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.2), rgba(0,0,0,0.6)); border-radius: 15px;"></div>
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
       filteredPosts.forEach(post => {
         const catColor = getCategoryColor(post.category);
         const card = document.createElement('a');
-        card.href = `blog-post.html?slug=${post.slug}`;
+        card.href = `${lang === 'ar' ? '/blog/' : '/en/blog/'}${post.slug}/`;
         card.style.textDecoration = 'none';
         card.innerHTML = `
           <div class="glass" style="display: flex; flex-direction: column; height: 100%; padding: 1.5rem; border-radius: 20px; transition: all 0.3s ease; border-top: 2px solid ${catColor};" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">

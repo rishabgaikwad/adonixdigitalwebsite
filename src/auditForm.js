@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const industry = industrySelect.value === 'Other' ? industryOtherInput.value : industrySelect.value;
             const website = document.getElementById('audit_website').value || 'Not provided';
 
-            const payload = {
+            const payload1 = {
                 access_key: 'f06c8e4f-4415-4c9e-9299-b35c9bee425d',
                 subject: 'New Ad Funnel AI Audit Request',
                 name: document.getElementById('audit_name').value,
@@ -106,16 +106,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 industry: industry,
                 budget: document.getElementById('audit_budget').value
             };
+            
+            const payload2 = {
+                ...payload1,
+                access_key: 'feac2717-4f3b-4e00-aec6-713775282534'
+            };
 
             try {
-                const response = await fetch('https://api.web3forms.com/submit', {
+                const fetchConfig = (p) => ({
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(p)
                 });
+                
+                const [response, response2] = await Promise.all([
+                    fetch('https://api.web3forms.com/submit', fetchConfig(payload1)),
+                    fetch('https://api.web3forms.com/submit', fetchConfig(payload2))
+                ]);
 
                 const result = await response.json();
                 

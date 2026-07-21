@@ -1,7 +1,7 @@
 export const blogPosts = [
   {
     id: 7,
-    title: "Website Development Company Saudi Arabia: How to Choose the Right Partner in 2026",
+    title: "Website Development Company Saudi Arabia: 2026 Guide",
     title_ar: "شركة تطوير مواقع في السعودية: كيف تختار الشريك المناسب في 2026",
     slug: "website-development-company-saudi-arabia",
     image: "/blog/Website Development Company Saudi Arabia.png",
@@ -13,7 +13,7 @@ export const blogPosts = [
     date_ar: "يوليو 2026",
     readTime: "8 min read",
     readTime_ar: "8 دقائق قراءة",
-    excerpt: "Searching for the best website development company in Saudi Arabia? Adonix Digital builds fast, SEO-ready, conversion-focused websites for KSA businesses.",
+    excerpt: "Looking for a website development company in Saudi Arabia? Adonix Digital builds fast, SEO-ready, conversion-focused websites for KSA businesses.",
     excerpt_ar: "تبحث عن أفضل شركة تطوير مواقع في السعودية؟ أدونيكس ديجيتال تصمم مواقع سريعة ومتوافقة مع محركات البحث وعالية التحويل لأعمالك في المملكة.",
     content: `
       <p>Every business in Saudi Arabia is competing for attention online — but not every website is built to win that competition. A website that loads slowly, looks outdated, or fails to convert visitors into customers isn't just a missed opportunity; it's actively costing businesses revenue every single day.</p>

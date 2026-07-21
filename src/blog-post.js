@@ -2,7 +2,15 @@ import { blogPosts } from './blogData.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
-  const slug = urlParams.get('slug');
+  let slug = urlParams.get('slug');
+  if (!slug) {
+    const pathParts = window.location.pathname.split('/');
+    // Check if the URL is like /blog/slug/ or /en/blog/slug/
+    const blogIndex = pathParts.indexOf('blog');
+    if (blogIndex !== -1 && pathParts.length > blogIndex + 1) {
+      slug = pathParts[blogIndex + 1];
+    }
+  }
 
   const postHero = document.getElementById('post-hero');
   const postContent = document.getElementById('post-content');
@@ -34,6 +42,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const getField = (obj, field) => obj[`${field}_${lang}`] || obj[field];
 
     if (postHero) {
+      
+      // Dynamic SEO Injection for Blog Post
+      const postTitle = getField(post, 'title');
+      const postExcerpt = getField(post, 'excerpt');
+      
+      document.title = postTitle + " | Adonix Digital";
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) metaDesc.setAttribute("content", postExcerpt);
+      
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) ogTitle.setAttribute("content", postTitle);
+      
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc) ogDesc.setAttribute("content", postExcerpt);
+      
+      const ogImage = document.querySelector('meta[property="og:image"]');
+      if (ogImage) ogImage.setAttribute("content", "https://adonixdigital.com" + post.image);
+      
+      const twTitle = document.querySelector('meta[name="twitter:title"]');
+      if (twTitle) twTitle.setAttribute("content", postTitle);
+      
+      const twDesc = document.querySelector('meta[name="twitter:description"]');
+      if (twDesc) twDesc.setAttribute("content", postExcerpt);
+      
+      const twImage = document.querySelector('meta[name="twitter:image"]');
+      if (twImage) twImage.setAttribute("content", "https://adonixdigital.com" + post.image);
+
+      // JSON-LD BlogPosting Schema
+      const script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.text = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": postTitle,
+        "image": "https://adonixdigital.com" + post.image,
+        "author": {
+          "@type": "Organization",
+          "name": getField(post, 'author')
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Adonix Digital",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://adonixdigital.com/adonixlogot.svg"
+          }
+        },
+        "description": postExcerpt
+      });
+      document.head.appendChild(script);
+
       postHero.innerHTML = `
         <div style="background-image: url('${post.image}'); background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 20px; width: 100%; min-height: 400px; margin-bottom: 2rem; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: flex-end;">
            <div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 100%); border-radius: 20px; z-index: 1;"></div>

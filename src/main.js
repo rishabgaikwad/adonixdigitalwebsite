@@ -658,11 +658,11 @@ const translations = {
   }
 };
 
-let currentLang = localStorage.getItem("adonix_lang_v2") || "ar";
+let currentLang = window.location.pathname.startsWith("/en") ? "en" : "ar";
 
 function setLanguage(lang) {
   currentLang = lang;
-  localStorage.setItem("adonix_lang_v2", lang);
+  // localStorage.setItem removed
   const htmlEl = document.documentElement;
   htmlEl.setAttribute("lang", lang);
   htmlEl.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
