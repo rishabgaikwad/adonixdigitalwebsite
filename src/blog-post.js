@@ -177,12 +177,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (faqItems.length > 0) {
+          const faqSchema = {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": []
+          };
           let accordionHtml = `<h3 style="color: white; margin-bottom: 1.5rem; font-size: 1.8rem; text-align: start;">${faqHeading.innerHTML}</h3>`;
           
           faqItems.forEach(item => {
             const strongTag = item.querySelector('strong');
-            let question = strongTag.innerHTML;
-            let answer = item.innerHTML.replace(strongTag.outerHTML, '').replace(/^<br\s*\/?>/, '').trim();
+            let question = strongTag ? strongTag.innerHTML : '';
+            let answer = strongTag ? item.innerHTML.replace(strongTag.outerHTML, '').replace(/^<br\s*\/?>/, '').trim() : '';
+            
+            if (question && answer) {
+              faqSchema.mainEntity.push({
+                "@type": "Question",
+                "name": question.replace(/<[^>]+>/g, ''),
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": answer.replace(/<[^>]+>/g, '')
+                }
+              });
+            }
             
             accordionHtml += `
                <div class="faq-item" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding: 1rem 0;">
@@ -216,6 +232,13 @@ document.addEventListener('DOMContentLoaded', () => {
           
           faqHeading.remove();
           faqItems.forEach(item => item.remove());
+          
+          if (faqSchema.mainEntity.length > 0) {
+            const faqScript = document.createElement('script');
+            faqScript.type = 'application/ld+json';
+            faqScript.text = JSON.stringify(faqSchema, null, 2);
+            document.head.appendChild(faqScript);
+          }
         } else if (faqSection) {
           faqSection.remove();
         }

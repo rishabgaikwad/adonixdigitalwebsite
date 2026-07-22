@@ -101,7 +101,7 @@ blogPosts.forEach(post => {
     content = content.replace(/href="audit\.html"/g, `href="${baseUrl}audit.html"`);
     
     // Inject Static H1
-    content = content.replace(/id="post-hero"[^>]*>[\s\S]*?<\/div>/, `id="post-hero"><h1>\${postTitle}</h1></div>`);
+    content = content.replace(/id="post-hero"[^>]*>[\s\S]*?<\/div>/, `id="post-hero"><h1>${postTitle}</h1></div>`);
     
     const insertIndex = content.indexOf('<!-- SEO Implementation -->');
     if (insertIndex !== -1) {
