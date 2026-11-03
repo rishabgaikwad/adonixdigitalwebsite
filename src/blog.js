@@ -6,11 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const filtersContainer = document.getElementById('blog-filters');
 
   let activeCategory = 'All';
-  const categories = ['All', 'AI & Automation', 'Marketing', 'Company News', 'Product Updates'];
+  const categories = ['All', 'AI & Automation', 'Marketing', 'Web Development', 'Company News', 'Product Updates'];
 
   function getCategoryColor(category) {
     if (category === 'Company News') return '#facc15'; // gold
     if (category === 'AI & Automation') return '#22d3ee'; // cyan
+    if (category === 'Marketing') return '#38bdf8'; // sky blue
+    if (category === 'Web Development' || category === 'Web Design') return '#a855f7'; // purple
     return '#888'; // muted gray for others
   }
 
@@ -18,9 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const lang = document.documentElement.lang || 'en';
     const catTranslations = {
       'All': { en: 'All', ar: 'الكل' },
-      'Company News': { en: 'Company News', ar: 'أخبار الشركة' },
       'AI & Automation': { en: 'AI & Automation', ar: 'الذكاء الاصطناعي والأتمتة' },
       'Marketing': { en: 'Marketing', ar: 'التسويق' },
+      'Web Development': { en: 'Web Development', ar: 'تطوير المواقع' },
+      'Company News': { en: 'Company News', ar: 'أخبار الشركة' },
       'Product Updates': { en: 'Product Updates', ar: 'تحديثات المنتج' }
     };
     filtersContainer.innerHTML = '';
@@ -54,17 +57,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const lang = document.documentElement.lang || 'en';
     const getField = (obj, field) => obj[`${field}_${lang}`] || obj[field];
 
+    const matchesCategory = (pCategory, selectedCat) => {
+      if (selectedCat === 'All') return true;
+      if (selectedCat === 'Web Development') return pCategory === 'Web Development' || pCategory === 'Web Design';
+      return pCategory === selectedCat;
+    };
+
     const featuredPost = blogPosts.find(p => p.featured);
     const standardPosts = blogPosts.filter(p => !p.featured);
     
     // Filter logic
     const filteredPosts = activeCategory === 'All' 
       ? standardPosts 
-      : standardPosts.filter(p => p.category === activeCategory);
+      : standardPosts.filter(p => matchesCategory(p.category, activeCategory));
 
     // Render Featured (only show if 'All' or matches category)
     if (featuredContainer && featuredPost) {
-      if (activeCategory === 'All' || featuredPost.category === activeCategory) {
+      if (matchesCategory(featuredPost.category, activeCategory)) {
         featuredContainer.style.display = 'block';
         const catColor = getCategoryColor(featuredPost.category);
         featuredContainer.innerHTML = `
@@ -73,14 +82,14 @@ document.addEventListener('DOMContentLoaded', () => {
               <div style="background: url('${featuredPost.image}') center/cover no-repeat; border-radius: 15px; min-height: 300px; display: flex; align-items: center; justify-content: center; position: relative;">
                  <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.2), rgba(0,0,0,0.6)); border-radius: 15px;"></div>
               </div>
-              <div style="display: flex; flex-direction: column; justify-content: center; text-align: left;">
+              <div style="display: flex; flex-direction: column; justify-content: center; text-align: start;">
                 <div style="margin-bottom: 1rem;">
                   <span style="background: rgba(255,255,255,0.1); color: ${catColor}; padding: 0.3rem 1rem; border-radius: 50px; font-size: 0.8rem; font-weight: 600;">${getField(featuredPost, 'category')}</span>
                 </div>
                 <h2 style="font-size: 2.5rem; color: white; margin-bottom: 1rem; line-height: 1.2;">${getField(featuredPost, 'title')}</h2>
                 <p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem; line-height: 1.6; font-size: 1.1rem;">${getField(featuredPost, 'excerpt')}</p>
                 <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.9rem; color: rgba(255,255,255,0.4); margin-bottom: 2rem;">
-                  <span>${getField(featuredPost, 'author')}</span> &bull; <span>${getField(featuredPost, 'date')}</span> &bull; <span>${getField(featuredPost, 'readTime')}</span>
+                  <span>${getField(featuredPost, 'author')}</span> &bull; <span>${getField(featuredPost, 'publishedDate') || getField(featuredPost, 'date')}</span> &bull; <span>${getField(featuredPost, 'readTime')}</span>
                 </div>
                 <div>
                   <span style="color: #22d3ee; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem;">${lang === 'ar' ? 'اقرأ المقال \u2190' : 'Read Article &rarr;'}</span>
@@ -107,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="background: url('${post.image}') center/cover no-repeat; border-radius: 15px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; position: relative;">
                <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.2), rgba(0,0,0,0.7)); border-radius: 15px;"></div>
             </div>
-            <div style="flex: 1; text-align: left; display: flex; flex-direction: column;">
+            <div style="flex: 1; text-align: start; display: flex; flex-direction: column;">
               <div style="margin-bottom: 1rem;">
                 <span style="background: rgba(255,255,255,0.1); color: ${catColor}; padding: 0.3rem 0.8rem; border-radius: 50px; font-size: 0.75rem; font-weight: 600;">${getField(post, 'category')}</span>
               </div>
@@ -115,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem; line-height: 1.6; font-size: 0.95rem; flex: 1;">${getField(post, 'excerpt')}</p>
               <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: rgba(255,255,255,0.4); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
                 <span>${getField(post, 'author')}</span>
-                <span>${getField(post, 'readTime')}</span>
+                <span>${getField(post, 'publishedDate') || getField(post, 'date')}</span>
               </div>
             </div>
           </div>

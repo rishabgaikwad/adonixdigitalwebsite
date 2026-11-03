@@ -77,14 +77,37 @@ blogPosts.forEach(post => {
       <meta name="twitter:url" content="${url}" />
     `;
     
+    const publishedDate = post.datePublished;
+    const modifiedDate = post.dateModified || post.datePublished;
+    const publishedText = isEn ? (post.publishedDate_en || `Published: ${post.date}`) : (post.publishedDate_ar || `تاريخ النشر: ${post.date_ar || post.date}`);
+    const updatedText = isEn ? post.updatedDate_en : post.updatedDate_ar;
+
     const schema = {
       "@context": "https://schema.org",
       "@type": "BlogPosting",
       "headline": postTitle,
       "image": `${domain}${postImage}`,
-      "author": { "@type": "Organization", "name": postAuthor },
-      "publisher": { "@type": "Organization", "name": "Adonix Digital", "logo": { "@type": "ImageObject", "url": `${domain}/adonixlogot.svg` } },
-      "description": postExcerpt
+      "author": {
+        "@type": "Organization",
+        "name": postAuthor,
+        "url": domain
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Adonix Digital",
+        "logo": {
+          "@type": "ImageObject",
+          "url": `${domain}/adonixlogot.svg`
+        }
+      },
+      "datePublished": publishedDate,
+      "dateModified": modifiedDate,
+      "description": postExcerpt,
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": url
+      },
+      "inLanguage": isEn ? "en-SA" : "ar-SA"
     };
     
     const schemaTag = `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`;
@@ -100,8 +123,11 @@ blogPosts.forEach(post => {
     content = content.replace(/href="contact\.html"/g, `href="${baseUrl}contact.html"`);
     content = content.replace(/href="audit\.html"/g, `href="${baseUrl}audit.html"`);
     
-    // Inject Static H1
-    content = content.replace(/id="post-hero"[^>]*>[\s\S]*?<\/div>/, `id="post-hero"><h1>${postTitle}</h1></div>`);
+    // Inject Static H1 and date metadata
+    const dateMetaHtml = updatedText
+      ? `<span>${publishedText}</span> &bull; <span>${updatedText}</span>`
+      : `<span>${publishedText}</span>`;
+    content = content.replace(/id="post-hero"[^>]*>[\s\S]*?<\/div>/, `id="post-hero"><h1>${postTitle}</h1><div class="post-meta-static" style="color:rgba(255,255,255,0.7);font-size:0.95rem;margin-top:0.75rem;"><span>${postAuthor}</span> &bull; ${dateMetaHtml}</div></div>`);
     
     const insertIndex = content.indexOf('<!-- SEO Implementation -->');
     if (insertIndex !== -1) {

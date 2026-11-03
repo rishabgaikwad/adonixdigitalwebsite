@@ -69,10 +69,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const twImage = document.querySelector('meta[name="twitter:image"]');
       if (twImage) twImage.setAttribute("content", "https://adonixdigital.com" + post.image);
 
-      // JSON-LD BlogPosting Schema
-      const script = document.createElement('script');
-      script.type = 'application/ld+json';
-      script.text = JSON.stringify({
+      // JSON-LD BlogPosting Schema - Ensure exactly one exists
+      const existingScripts = Array.from(document.head.querySelectorAll('script[type="application/ld+json"]'));
+      let blogPostingScript = existingScripts.find(s => {
+        try {
+          const parsed = JSON.parse(s.textContent);
+          return parsed['@type'] === 'BlogPosting';
+        } catch {
+          return false;
+        }
+      });
+
+      const schemaData = {
         "@context": "https://schema.org",
         "@type": "BlogPosting",
         "headline": postTitle,
@@ -89,9 +97,30 @@ document.addEventListener('DOMContentLoaded', () => {
             "url": "https://adonixdigital.com/adonixlogot.svg"
           }
         },
-        "description": postExcerpt
-      });
-      document.head.appendChild(script);
+        "datePublished": post.datePublished,
+        "dateModified": post.dateModified || post.datePublished,
+        "description": postExcerpt,
+        "inLanguage": lang === 'ar' ? 'ar-SA' : 'en-SA',
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": lang === 'ar' ? `https://adonixdigital.com/blog/${slug}/` : `https://adonixdigital.com/en/blog/${slug}/`
+        }
+      };
+
+      if (blogPostingScript) {
+        blogPostingScript.textContent = JSON.stringify(schemaData, null, 2);
+      } else {
+        const script = document.createElement('script');
+        script.type = 'application/ld+json';
+        script.textContent = JSON.stringify(schemaData, null, 2);
+        document.head.appendChild(script);
+      }
+
+      const pubDateText = getField(post, 'publishedDate') || (lang === 'ar' ? `تاريخ النشر: ${post.date_ar || post.date}` : `Published: ${post.date}`);
+      const updDateText = getField(post, 'updatedDate');
+      const dateMetaDisplay = updDateText
+        ? `<span>${pubDateText}</span> <span style="color: rgba(255,255,255,0.4);">&bull;</span> <span style="color: #22d3ee;">${updDateText}</span>`
+        : `<span>${pubDateText}</span>`;
 
       postHero.innerHTML = `
         <div style="background-image: url('${post.image}'); background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 20px; width: 100%; min-height: 400px; margin-bottom: 2rem; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: flex-end;">
@@ -100,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="badge fade-in" style="margin-bottom: 1rem; border-color: ${catColor}; color: ${catColor}; box-shadow: none;">${getField(post, 'category')}</div>
               <h1 class="main-headline fade-in" style="font-size: clamp(2rem, 5vw, 3.5rem); text-align: center; margin-bottom: 1.5rem; text-shadow: 0 4px 20px rgba(0,0,0,0.8); max-width: 900px; line-height: 1.2;">${getField(post, 'title')}</h1>
               <div class="fade-in" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem; font-size: 1rem; color: rgba(255,255,255,0.8);">
-                <span>${getField(post, 'author')}</span> <span style="color: rgba(255,255,255,0.4);">&bull;</span> <span>${getField(post, 'date')}</span> <span style="color: rgba(255,255,255,0.4);">&bull;</span> <span>${getField(post, 'readTime')}</span>
+                <span>${getField(post, 'author')}</span> <span style="color: rgba(255,255,255,0.4);">&bull;</span> ${dateMetaDisplay} <span style="color: rgba(255,255,255,0.4);">&bull;</span> <span>${getField(post, 'readTime')}</span>
               </div>
            </div>
         </div>
@@ -111,12 +140,27 @@ document.addEventListener('DOMContentLoaded', () => {
       postContent.innerHTML = getField(post, 'content');
       
       // Simple styling adjustments for content
+      const h2s = postContent.querySelectorAll('h2');
+      h2s.forEach(h => {
+        h.style.color = 'white';
+        h.style.marginTop = '3rem';
+        h.style.marginBottom = '1.25rem';
+        h.style.fontSize = '2rem';
+        h.style.lineHeight = '1.3';
+      });
       const headings = postContent.querySelectorAll('h3');
       headings.forEach(h => {
-        h.style.color = 'white';
-        h.style.marginTop = '2.5rem';
+        h.style.color = '#22d3ee';
+        h.style.marginTop = '2rem';
         h.style.marginBottom = '1rem';
-        h.style.fontSize = '1.8rem';
+        h.style.fontSize = '1.45rem';
+        h.style.lineHeight = '1.4';
+      });
+      const links = postContent.querySelectorAll('a');
+      links.forEach(a => {
+        a.style.color = '#22d3ee';
+        a.style.textDecoration = 'underline';
+        a.style.textUnderlineOffset = '4px';
       });
       const paragraphs = postContent.querySelectorAll('p');
       paragraphs.forEach(p => {
@@ -252,14 +296,14 @@ document.addEventListener('DOMContentLoaded', () => {
       relatedPosts.forEach(rp => {
         const rpColor = getCategoryColor(rp.category);
         const card = document.createElement('a');
-        card.href = `blog-post.html?slug=${rp.slug}`;
+        card.href = `${lang === 'ar' ? '/blog/' : '/en/blog/'}${rp.slug}/`;
         card.style.textDecoration = 'none';
         card.innerHTML = `
           <div class="glass" style="display: flex; flex-direction: column; height: 100%; padding: 1.5rem; border-radius: 20px; transition: all 0.3s ease; border-top: 2px solid ${rpColor};" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
             <div style="background: url('${rp.image}') center/cover no-repeat; border-radius: 15px; height: 150px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; position: relative;">
                <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.2), rgba(0,0,0,0.7)); border-radius: 15px;"></div>
             </div>
-            <div style="flex: 1; text-align: left; display: flex; flex-direction: column;">
+            <div style="flex: 1; text-align: start; display: flex; flex-direction: column;">
               <div style="margin-bottom: 0.5rem;">
                 <span style="color: ${rpColor}; font-size: 0.75rem; font-weight: 600; background: rgba(255,255,255,0.1); padding: 0.2rem 0.6rem; border-radius: 50px;">${getField(rp, 'category')}</span>
               </div>
